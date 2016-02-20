@@ -71,6 +71,27 @@ int main(int argc, const char * argv[])
     e4 = mklet("y", mkconstant(5), e3);
     e5 = mklet("z", mkconstant(40), e4);
     printf("%d\n", evalexp(e5)); // should print 2000
+
+    struct exp *e6, *e7;
+
+    l = NULL;
+    l = cons(mkconstant(5), l);
+    l = cons(mkconstant(3), l);
+    l = cons(mkconstant(2), l);
+    e6 = mkopapp(isplus, l);
+
+    l = NULL;
+    l = cons(mkvar("x"), l);
+    l = cons(mkvar("x"), l);
+    l = cons(mkvar("x"), l);
+    e7 = mkopapp(ismult, l);
+
+    e6 = mklet("x", e6, e7);
+
+    printf("%d\n", evalexp(e6)); // should print  1000
+
+
+
     return 0;
 }
 

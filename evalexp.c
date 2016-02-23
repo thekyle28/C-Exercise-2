@@ -4,79 +4,100 @@
 #include <stdbool.h>
 
 #include "evalexp.h"
+struct env *envglb; //global variables
 
-struct env *env;
-
-//environment structure, which is a list of variables, their values and their scopes.
+//environment structure, which is a list of variables and their values.
 struct env{
-    char variableName[8];
+    char var[8];
     int value;
-    int scope;
     struct env *next;
 };
 
-struct env *mkenv(char variableName[8], int value, int scope, struct env *next){
+//creates a new env with one variable.
+struct env *mkenv(char varName[8], int value){
     struct env *env = malloc(sizeof(struct env));
-    strncpy(env->variableName, variableName, 8);
+    strncpy(env->var, varName, 8);
     env->value = value;
-    env->scope = scope;
-    env->next = next;
-    return env;
-}
-
-struct env *mkemptyenv()
-{
-    struct env *env = malloc(sizeof(struct env));
-    strncpy(env->variableName, "", 8);
-    env->value = 0;
-    env->scope = 0;
     env->next = NULL;
     return env;
 }
 
-void add(struct env *new, struct env *orig)
-{
-    //ensures that the end of the list has been reached so that the new element may be added.
-    while(orig->next){ //checks that the next pointer is not null.
-        orig = orig->next; //if the next pointer is not null then move along the list.
+struct env *copyEnv(struct env *env){
+
+    // the head element
+    struct env *newEnv = malloc(sizeof(struct env));
+    struct env *first = newEnv; //first points to the first element in the list.
+    strncpy(newEnv->var, env->var, 8);
+    newEnv->value = env->value;
+
+    //the rest of the environment
+    env = env->next;
+    while (env) { //makes sure that the environment isn't null
+        newEnv->next = malloc(sizeof(struct env));
+        newEnv = newEnv->next;
+        strncpy(newEnv->var, env->var, 8);
+        newEnv->value = env->value;
+        env=env->next;
     }
-    orig->next = new; //assign the next value to be the new environment.
+    newEnv->next = NULL;
+    return first;
+} //fairly sure copy is correct.
+
+//adds a variable to an environment and overrides it if it already exists.
+void addVarOverride(char var[8], int value, struct env *env)
+{
+        while(env->next){ //checks that the next pointer is not null.
+            if(strcmp(var, env->var)==0){ //if the variables have the same name, overwrite the variable value with the new one.
+                env->value = value;
+            }
+                env = env->next; //if the next pointer is not null then move along the list.
+        }
+        //the last variable would have been reached at this point in the code.
+        if(strcmp(var, env->var)==0){ //if the variables have the same name, overwrite the variable value with the new one.
+            env->value = value;
+        }
+        else //otherwise add it to the end of the environment list.
+        env->next = mkenv(var, value);
+
 }
 
-
-//a method that compares the new variable to all of the variables in the environment list to see if it is a duplicate variable name.
-bool isDuplicateVar(char var[8], struct env *env){
-    if(env){
-        if(strcmp(var, env->variableName)==0)
-            return true;
-        else
-            return isDuplicateVar(var, env->next);
+//adds variables without overwriting values, and doesn't add the variable if it is already in the environment.
+void addVar(char var[8], int value, struct env *env)
+{
+    while(env->next){ //checks that the next pointer is not null.
+        if(strcmp(var, env->var)==0){ //if the variables have the same name, overwrite the variable value with the new one.
+            return;
+        }
+        env = env->next; //if the next pointer is not null then move along the list.
     }
-    else
-        return false;
+    //the last variable would have been reached at this point in the code.
+    if(strcmp(var, env->var)==0){ //if the variables have the same name, overwrite the variable value with the new one.
+        return;
+    }
+    else //otherwise add it to the end of the environment list.
+        env->next = mkenv(var, value);
+
 }
 
 //returns the value for a given variable in a list of variables and values.
-int getval(char var[8], int scope, struct env *env){
+int getval(char var[8], struct env *env){
     if(env){ //check that the environment is not null
-        //if the variable is a duplicate, check that the scope of it is correct before returning the value.
-        if(isDuplicateVar(var, env)){
-            if((strcmp(env->variableName, var)==0) && scope == env->scope){ //if the variable names and the scopes are the same
+            if(strcmp(env->var, var)==0) //if the variable names are the same
                 return env->value; //return the value
-            }
-        }
-        else{
-            if((strcmp(env->variableName, var)==0)) //otherwise if the variable names are the same
-                return env->value; //return the value
-            return getval(var,scope,env->next); //check the next environment struct for the variable.
-        }
+        else
+                return getval(var,env->next); //check the next environment struct for the variable.
     }
-    else printf("%s\n", "Error variable not found.");
-    return -1;
+    else {
+        char str[20];
+        strcat(str, "Error variable not found");
+        printf("%s\n", str);
+        return -1;
+    }
 }
 
+int evalexpenv(struct exp *e, struct env *env); //forward declaration so that mutual recursion can occur.
 
-int evalexplist(struct explist *el, enum op op){
+int evalexplist2(struct explist *el, enum op op, struct env *env){
     if (!(el)){ //if the head is NULL i.e. the list is empty
         switch (op){
             case isplus:
@@ -89,69 +110,40 @@ int evalexplist(struct explist *el, enum op op){
     else{ //otherwise if the head isn't NULL
         switch (op){
             case isplus:
-                return evalexp(el->head) + evalexplist(el->tail, op); //Add the evaluation of the head of the expression to the rest of the list.
+                //Add the evaluation of the head of the expression to the rest of the list.
+                return evalexpenv(el->head, env) + evalexplist2(el->tail, op, env);
             case ismult:
-                return evalexp(el->head) * evalexplist(el->tail, op);//Multiply the evaluation of the head of the expression to the rest of the list.
+                //Multiply the evaluation of the head of the expression to the rest of the list.
+                return evalexpenv(el->head, env) * evalexplist2(el->tail, op, env);
         }
     }
 }
 
-int evalexp2(struct exp *e, int currentScope, struct env *env); //forward declaration so that mutual recursion can occur.
-
-int evalexplist2(struct explist *el, int scope, enum op op, struct env *env){
-    if (!(el)){ //if the head is NULL i.e. the list is empty
-        switch (op){
-            case isplus:
-                return 0; //if it is a sum operation return 0 so it doesn't affect the result.
-            case ismult:
-                return 1; // if it is a multiplication operation return 1 so that it doesn't affect the result.
-        }
-    }
-
-    else{ //otherwise if the head isn't NULL
-        switch (op){
-            case isplus:
-                return evalexp2(el->head, scope, env) + evalexplist2(el->tail, scope, op, env); //Add the evaluation of the head of the expression to the rest of the list.
-            case ismult:
-                return evalexp2(el->head, scope, env) * evalexplist2(el->tail, scope, op, env);//Multiply the evaluation of the head of the expression to the rest of the list.
-        }
-    }
-}
-
-int evalexp2(struct exp *e, int currentScope, struct env *env){
+int evalexpenv(struct exp *e, struct env *env){
+    if (!e) return 0;
     switch (e->tag){
         case isconstant:
             return e->constant;
-        case isopapp :
-            return evalexplist2(e->exps, currentScope, e->op, env);
-        case islet: {
-            struct env *newEnv;
-            //create a new env for the new variable, incrementing the scope of that variable and the current scope.
-            newEnv = mkenv(e->bvar, evalexp2(e->bexp, currentScope++, env), (env->scope)++, NULL);
-            add(newEnv, env);
-            return evalexp2(e->body, currentScope++, env);
+        case isopapp :{
+            return evalexplist2(e->exps, e->op, env);
         }
-
-        //return the evaluated expression body along with the new environment including the new variable.
-            //return evalexp2(e->body, (env->scope)++, add(newEnv,env));
+        case islet: {
+            //copy the environment and pass it to the
+            struct env *copy;
+            copy = copyEnv(env);
+            addVarOverride(e->bvar,evalexpenv(e->bexp,copy),copy);
+            addVar(e->bvar,evalexpenv(e->bexp,env),env);
+            return evalexpenv(e->body, copy);
+        }
         case isvar:
-            return getval(e->var, currentScope, env);
+            return getval(e->var, env);
     }
-    printf("%s\n", "Error variable not found.");
+    printf("%s\n", "Type not found.");
     return -1;
 
 }
 
 int evalexp(struct exp *e){
-        switch (e->tag){
-        case isconstant:
-            return e->constant;
-        case isopapp :
-            return evalexplist2(e->exps,1,e->op, mkemptyenv());
-        case islet:
-            return evalexp2(e->body, 0, mkenv(e->bvar, evalexp(e->bexp), 0, NULL));
-        case isvar:
-            printf("%s\n", "Error, there are no let bindings yet in the expression, so there can be no variables.");
-    }
-    return -1;
+    envglb = mkenv("",0);//initialise an environment
+    return evalexpenv(e, envglb);
 }

@@ -90,7 +90,33 @@ int main(int argc, const char * argv[])
 
     printf("%d\n", evalexp(e6)); // should print  1000
 
+// let x = (let x = 2 in x + 3) in x + (let x = 4 + x in x + 9) + x
+    struct exp *e8, *e9, *e10, *e11, *e12, *e13,*e14;
 
+    l = NULL;
+    l = cons(mkconstant(4), l);
+    l = cons(mkvar("x"), l);
+    e8 = mkopapp(isplus, l); // 4 + x
+    l = NULL;
+    l = cons(mkvar("x"), l);
+    l = cons(mkconstant(9), l);
+    e9 = mkopapp(isplus, l); // x + 9
+    e10 = mklet("x", e8, e9); // let x = 4 + x in x + 9
+
+    l = NULL;
+    l = cons(mkvar("x"), l);
+    l = cons(e10, l);
+    l = cons(mkvar("x"), l);
+    e11 = mkopapp(isplus, l); // x + (let x = 4 + x in x + 9) + x
+
+    l = NULL;
+    l = cons(mkconstant(3), l);
+    l = cons(mkvar("x"), l);
+    e12 = mkopapp(isplus,l); // x + 3
+    e13 = mklet("x", mkconstant(2), e12); // let x = 2 in x + 3
+
+    e14 = mklet("x", e13, e11); // let x = (let x = 2 in x + 3) in x + (let x = 4 + x in x + 9) + x
+    printf("%d\n", evalexp(e14)); // should print 28
 
     return 0;
 }

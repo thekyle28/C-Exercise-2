@@ -88,7 +88,7 @@ int getval(char var[8], struct env *env){
                 return getval(var,env->next); //check the next environment struct for the variable.
     }
     else {
-        char str[20];
+        char str[25] = {0};
         strcat(str, "Error variable not found");
         printf("%s\n", str);
         return -1;
